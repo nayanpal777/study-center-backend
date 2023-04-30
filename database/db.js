@@ -1,13 +1,21 @@
-var sqlite3 = require('sqlite3');
+const mongoose = require('mongoose');
+const MONGODB_URL = process.env.MONGODB_URL;
 
-var db = new sqlite3.Database('./database/student.db', (err) => {
-  if (err) {
-      console.log("Getting error " + err);
-      exit(1);
-  } else {
-    console.log("Database created successfully");
-    db.run('CREATE TABLE IF NOT EXISTS student(id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, phone TEXT, class TEXT, Address TEXT)');
-    console.log("Table created");
-  }
-});
-module.exports = db;
+const mongoDBconnect = async (req, res) => {
+  await mongoose.connect(
+      MONGODB_URL,
+      {
+          useNewUrlParser: true,
+          useUnifiedTopology: true,
+      },
+      (err, resp) => {
+          if(resp){
+              console.log('DB Connection Successfull....' + resp);
+              
+          }else if(err){
+              console.log('DB Connection Fail....' + err);
+          }
+      }
+  );
+}
+mongoDBconnect();
