@@ -11,6 +11,18 @@ const StudentModel = mongoose.Schema({
     type: String,
     require: true
   },
+  usertype: {
+    type: String,
+    require: true
+  },
+  email: {
+    type: String,
+    require: true
+  },
+  fathername: {
+    type: String,
+    require: true
+  },
   class: {
     type: String,
     require: true
@@ -23,6 +35,10 @@ const StudentModel = mongoose.Schema({
     type: String,
     require: true
   },
+  password: {
+    type: String,
+    require: true
+  }
 });
 
 //creating Models

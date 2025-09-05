@@ -1,5 +1,6 @@
 const router = require('express').Router();
 const bodyparser = require('body-parser');
+const bcryptjs = require('bcryptjs');
 const student = require('../database/models/student');
 const { check, validationResult } = require('express-validator');
 
@@ -28,11 +29,25 @@ router.get('/students', function (req, res) {
 router.post('/createStudent', [
   check('name').not().isEmpty().trim().escape(),
   check('phone').not().isEmpty().trim().escape(),
+  check('usertype').not().isEmpty().trim().escape(),
+  check('email').not().isEmpty().trim().escape(),
+  check('fathername').not().isEmpty().trim().escape(),
   check('class').not().isEmpty().trim().escape(),
   check('board').not().isEmpty().trim().escape(),
   check('address').not().isEmpty().trim().escape(),
+  check('password').not().isEmpty().trim().escape(),
 ], (req, res) => {
-  data = { name: req.body.name, phone: req.body.phone, class: req.body.class, board: req.body.board, address: req.body.address }
+  
+  const hashpassword = bcryptjs.hashSync(req.body.password, 10);
+  data = { name: req.body.name,
+           phone: req.body.phone, 
+           usertype: req.body.usertype,
+           email: req.body.email,
+           fathername: req.body.fathername,
+           class: req.body.class, 
+           board: req.body.board, 
+           address: req.body.address, 
+           password: hashpassword }
   console.log(data);
   const error = validationResult(req);
   if (!error.isEmpty()) {
@@ -58,6 +73,100 @@ router.post('/createStudent', [
     })
   });
 });
+
+/**---------------------------------------------------
+    *Route for Student Login  
+------------------------------------------------------*/
+router.post('/StudentLogin',
+    [
+        check('email').isEmail().normalizeEmail(),
+        check('password').not().isEmpty().trim().escape()
+    ], (req, res) => {
+        const error = validationResult(req);
+        if (!error.isEmpty()) {
+            return res.json({
+                status: false,
+                msg: 'Invalid Input....!',
+                err: error.array()
+            });
+        }
+
+        student.findOne({ 'email': req.body.email }, (err, student) => {
+            if (!student) {
+                return res.json({
+                    status: false,
+                    msg: 'Email Not Found please SignUp First...!'
+                });
+            } else {
+                bcryptjs.compare(req.body.password, student.password, (err, isMatch) => {
+                    //if error
+                    if (err)
+                        return res.send('error');
+
+                    //check password valid or not
+                    if (isMatch === false) {
+                        return res.json({
+                            status: false,
+                            msg: 'Invalid Password'
+                        });
+                    } else {
+                        return res.status(200).json({
+                            status: true,
+                            msg: 'Login Sucessfully....',
+                            data: student
+                        });
+                    }
+                });
+            }
+        });
+    });
+
+/**---------------------------------------------------
+    * Forgot password API  
+------------------------------------------------------*/
+router.put('/forgotpassword',
+    [
+        check('email').isEmail().normalizeEmail(),
+        check('password').not().isEmpty().trim().escape()
+    ],
+    (req, res) => {
+        //check validation Errors
+        const error = validationResult(req);
+        if (!error.isEmpty()) {
+            return res.json({
+                status: false,
+                msg: 'Invalid Input....!',
+                err: error.array()
+            });
+        }
+        //password hashing
+        const hashpassword = bcryptjs.hashSync(req.body.password, 10);
+        student_model.findOneAndUpdate({ 'email': req.body.email }, { 'password': hashpassword }, (err, result) => {
+            //if error
+            if (err) {
+                return res.json({
+                    status: false,
+                    msg: 'Server Error, please contact to Admin',
+                    error: err
+                });
+            }
+            //if result is null then email id not found
+            if (result === null) {
+                return res.json({
+                    status: false,
+                    msg: 'Email Not Found please SignUp First...!',
+                });
+            } else {
+                return res.json({
+                    status: true,
+                    msg: 'password change successfully....!',
+                });
+            }
+
+        });
+    }
+);
+
 
 //exports module
 module.exports = router;
