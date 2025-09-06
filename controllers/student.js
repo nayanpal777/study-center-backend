@@ -48,7 +48,6 @@ router.post('/createStudent', [
            board: req.body.board, 
            address: req.body.address, 
            password: hashpassword }
-  console.log(data);
   const error = validationResult(req);
   if (!error.isEmpty()) {
     return res.json({

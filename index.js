@@ -3,12 +3,14 @@ var bodyParser = require('body-parser');
 const cors = require('cors');
 const db = require('./database/db');
 const StudentController = require('./controllers/student');
+const DashboardController = require('./controllers/dashboard');
 var app = express();
 
 app.use(cors());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
 app.use('/', StudentController);
+app.use('/Dashboard', DashboardController);
 
 app.get('/', function (req, res) {
   res.send('Application running successfully');
