@@ -227,8 +227,8 @@ router.patch('/DisableProfile',
                 err: error.array()
             });
         }
-
-        student.findOneAndUpdate({ 'phone': req.body.phone }, { 'disable_profile': req.body.disable_profile }, (err, result) => {
+        const disableBool = req.body.disable_profile === 'true';
+        student.findOneAndUpdate({ 'phone': req.body.phone }, { 'disable_profile': disableBool }, (err, result) => {
             //if error
             if (err) {
                 return res.json({
