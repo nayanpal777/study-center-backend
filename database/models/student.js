@@ -38,6 +38,15 @@ const StudentModel = mongoose.Schema({
   password: {
     type: String,
     require: true
+  },
+  profile_link: {
+    type: String,
+    required: false // optional, set true if mandatory
+  },
+  disable_profile: {
+    type: Boolean,
+    required: false, // optional, set true if mandatory
+    default: false
   }
 });
 

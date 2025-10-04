@@ -166,6 +166,92 @@ router.put('/forgotpassword',
     }
 );
 
+/**---------------------------------------------------
+    * Update Profile Link API  
+------------------------------------------------------*/
+router.patch('/UpdateProfileLink',
+    [
+        check('phone').not().isEmpty().trim().escape()    
+    ],
+    (req, res) => {
+        //check validation Errors
+        const error = validationResult(req);
+        if (!error.isEmpty()) {
+            return res.json({
+                status: false,
+                msg: 'Invalid Input....!',
+                err: error.array()
+            });
+        }
+
+        student.findOneAndUpdate({ 'phone': req.body.phone }, { 'profile_link': req.body.profile_link }, (err, result) => {
+            //if error
+            if (err) {
+                return res.json({
+                    status: false,
+                    msg: 'Server Error, please contact to Admin',
+                    error: err
+                });
+            }
+            //if result is null then email id not found
+            if (result === null) {
+                return res.json({
+                    status: false,
+                    msg: 'Record Not Found In DB, Contact Admin...!',
+                });
+            } else {
+                return res.json({
+                    status: true,
+                    msg: 'Profile Link Updated, It will be shown to student..!',
+                });
+            }
+        });
+    }
+);
+
+
+/**---------------------------------------------------
+    * Disable profile  
+------------------------------------------------------*/
+router.patch('/DisableProfile',
+    [
+        check('phone').not().isEmpty().trim().escape()    
+    ],
+    (req, res) => {
+        //check validation Errors
+        const error = validationResult(req);
+        if (!error.isEmpty()) {
+            return res.json({
+                status: false,
+                msg: 'Invalid Input....!',
+                err: error.array()
+            });
+        }
+
+        student.findOneAndUpdate({ 'phone': req.body.phone }, { 'disable_profile': req.body.disable_profile }, (err, result) => {
+            //if error
+            if (err) {
+                return res.json({
+                    status: false,
+                    msg: 'Server Error, please contact to Admin',
+                    error: err
+                });
+            }
+            //if result is null then email id not found
+            if (result === null) {
+                return res.json({
+                    status: false,
+                    msg: 'Record Not Found In DB, Contact Admin...!',
+                });
+            } else {
+                return res.json({
+                    status: true,
+                    msg: 'Profile Link Updated, It will be shown to student..!',
+                });
+            }
+        });
+    }
+);
 
 //exports module
 module.exports = router;
