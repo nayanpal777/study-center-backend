@@ -3,6 +3,7 @@ const bodyparser = require('body-parser');
 const bcryptjs = require('bcryptjs');
 const student = require('../database/models/student');
 const { check, validationResult } = require('express-validator');
+const ObjectId = require('mongoose').Types.ObjectId;
 
 router.get('/', (req, res) => {
   return res.send('Student Module Working fine....');
@@ -56,21 +57,36 @@ router.post('/createStudent', [
       err: error.array()
     });
   }
-  student.create(data, (err, result) => {
-    if (err) {
-      return res.json({
-        status: false,
-        msg: 'Having error while saving your data',
-        err: err
-      })
-    }
-    //if ok
-    return res.json({
-      status: true,
-      msg: 'Data saved successfully.',
-      res: result
+    student.findOne({ 'phone': req.body.phone }, (err, present) => {
+        if (err) {
+            return res.json({
+                status: false,
+                msg: 'Server Problem Please try later...!',
+                error: err
+            })
+        } else if (present) {
+            return res.json({
+                status: false,
+                msg: "Your phone number is already register, Please use different phone number.",
+            })
+        } else {
+            student.create(data, (err, result) => {
+                if (err) {
+                    return res.json({
+                        status: false,
+                        msg: 'Having error while saving your data',
+                        err: err
+                    })
+                }
+                //if ok
+                return res.json({
+                    status: true,
+                    msg: 'Data saved successfully.',
+                    res: result
+                })
+        });
+        }
     })
-  });
 });
 
 /**---------------------------------------------------
@@ -252,6 +268,39 @@ router.patch('/DisableProfile',
         });
     }
 );
+
+/**
+ * Delete Company Detail API
+ */
+router.delete('/DeleteStudent', (req, res) => {
+    if (!ObjectId.isValid(req.body.id)) {
+        return res.status(400).json({
+            status: false,
+            msg: 'Student Not Found.'
+        });
+    }
+    student.findByIdAndDelete(req.body.id, (err, result) => {
+        if (err) {
+            return res.json({
+                status: false,
+                msg: 'Database error in deleting the data',
+                error: err
+            })
+        } else if (result == null) {
+            return res.json({
+                status: false,
+                msg: 'Invalid Id',
+            })
+        } else {
+            return res.json({
+                status: true,
+                msg: 'Student deleted Successfully...',
+                res: result
+            })
+        }
+    });
+});
+
 
 //exports module
 module.exports = router;
