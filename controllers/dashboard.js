@@ -1,39 +1,35 @@
 const router = require('express').Router();
-const dashboard = require('../database/models/dashboard');
+const dashboardModel = require('../database/models/dashboard');
 const { check, validationResult } = require('express-validator');
 
 router.get('/', (req, res) => {
   return res.send('Dashboard Module Working fine....');
 })
 
-router.get('/Data', function (req, res) {
-  dashboard.find({}, (err, result)=>{
-    if (err) {
-      return res.json({
-        status: false,
-        msg: 'Having error while saving your data',
-        err: err
-      })
-    }
-    //if ok
+// GET all dashboard records
+router.get('/Data', async (req, res) => {
+  try {
+    const result = await dashboardModel.getAllDashboard();
     return res.json({
       status: true,
       msg: 'Student Data',
       res: result
     })
-  });
+  } catch (err) {
+    return res.json({
+      status: false,
+      msg: 'Having error while fetching data',
+      err: err.message
+    })
+  }
 });
 
+// POST create dashboard record
 router.post('/createDashboard', [
   check('name').not().isEmpty().trim().escape(),
   check('email').not().isEmpty().trim().escape(),
   check('class').not().isEmpty().trim().escape(),
-], (req, res) => {
-  
-  data = { name: req.body.name,
-           email: req.body.email,
-           class: req.body.class, 
-           permission: false }
+], async (req, res) => {
   const error = validationResult(req);
   if (!error.isEmpty()) {
     return res.json({
@@ -42,29 +38,37 @@ router.post('/createDashboard', [
       err: error.array()
     });
   }
-  dashboard.findOne({ 'email': req.body.email }, (err, data) => {
-    if (data) {
+
+  try {
+    // Check if email already exists
+    const existingRecord = await dashboardModel.getDashboardByEmail(req.body.email);
+    if (existingRecord) {
       return res.json({
-          status: false,
-          msg: 'Already you have provide the access.'
-      });
-    } else {
-      dashboard.create(data, (err, result) => {
-        if (err) {
-          return res.json({
-            status: false,
-            msg: 'Having error while saving your data',
-            err: err
-          })
-        }
-        //if ok
-        return res.json({
-          status: true,
-          msg: 'Request sent Successfully',
-        })
+        status: false,
+        msg: 'Already you have provide the access.'
       });
     }
-  });
+
+    // Create dashboard record
+    const data = { 
+      name: req.body.name,
+      email: req.body.email,
+      class: req.body.class, 
+      permission: false 
+    }
+
+    const result = await dashboardModel.createDashboardRecord(data);
+    return res.json({
+      status: true,
+      msg: 'Request sent Successfully',
+    })
+  } catch (err) {
+    return res.json({
+      status: false,
+      msg: 'Having error while saving your data',
+      err: err.message
+    })
+  }
 });
 
 module.exports = router;

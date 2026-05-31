@@ -1,54 +1,38 @@
 const router = require('express').Router();
 const bodyparser = require('body-parser');
 const bcryptjs = require('bcryptjs');
-const student = require('../database/models/student');
+const studentModel = require('../database/models/student');
 const { check, validationResult } = require('express-validator');
-const ObjectId = require('mongoose').Types.ObjectId;
 
 router.get('/', (req, res) => {
   return res.send('Student Module Working fine....');
 })
 
-router.get('/students', function (req, res) {
-  student.find({}, (err, result)=>{
-    if (err) {
-      return res.json({
-        status: false,
-        msg: 'Having error while saving your data',
-        err: err
-      })
-    }
-    //if ok
+// GET all students
+router.get('/students', async (req, res) => {
+  try {
+    const result = await studentModel.getAllStudents();
     return res.json({
       status: true,
       msg: 'Student Data',
       res: result
     })
-  });
+  } catch (err) {
+    return res.json({
+      status: false,
+      msg: 'Having error while fetching data',
+      err: err.message
+    })
+  }
 });
 
+// POST create student
 router.post('/createStudent', [
   check('name').not().isEmpty().trim().escape(),
   check('phone').not().isEmpty().trim().escape(),
-  check('usertype').not().isEmpty().trim().escape(),
-  check('email').not().isEmpty().trim().escape(),
-  check('fathername').not().isEmpty().trim().escape(),
-  check('class').not().isEmpty().trim().escape(),
-  check('board').not().isEmpty().trim().escape(),
-  check('address').not().isEmpty().trim().escape(),
   check('password').not().isEmpty().trim().escape(),
-], (req, res) => {
-  
-  const hashpassword = bcryptjs.hashSync(req.body.password, 10);
-  data = { name: req.body.name,
-           phone: req.body.phone, 
-           usertype: req.body.usertype,
-           email: req.body.email,
-           fathername: req.body.fathername,
-           class: req.body.class, 
-           board: req.body.board, 
-           address: req.body.address, 
-           password: hashpassword }
+  check('class').not().isEmpty().trim().escape(),
+], async (req, res) => {
   const error = validationResult(req);
   if (!error.isEmpty()) {
     return res.json({
@@ -57,36 +41,48 @@ router.post('/createStudent', [
       err: error.array()
     });
   }
-    student.findOne({ 'phone': req.body.phone }, (err, present) => {
-        if (err) {
-            return res.json({
-                status: false,
-                msg: 'Server Problem Please try later...!',
-                error: err
-            })
-        } else if (present) {
-            return res.json({
-                status: false,
-                msg: "Your phone number is already register, Please use different phone number.",
-            })
-        } else {
-            student.create(data, (err, result) => {
-                if (err) {
-                    return res.json({
-                        status: false,
-                        msg: 'Having error while saving your data',
-                        err: err
-                    })
-                }
-                //if ok
-                return res.json({
-                    status: true,
-                    msg: 'Data saved successfully.',
-                    res: result
-                })
-        });
-        }
+
+  try {
+    // Check if phone already exists
+    const present = await studentModel.getStudentByPhone(req.body.phone);
+    if (present) {
+      return res.json({
+        status: false,
+        msg: "Your phone number is already register, Please use different phone number.",
+      })
+    }
+
+    // Hash password and create student
+    const hashpassword = bcryptjs.hashSync(req.body.password, 10);
+    const data = { 
+      name: req.body.name,
+      phone: req.body.phone, 
+      class: req.body.class, 
+      password: hashpassword,
+      usertype: 'student'
+    }
+
+    const result = await studentModel.createStudent(data);
+    return res.json({
+      status: true,
+      msg: 'Data saved successfully.',
+      res: result
     })
+  } catch (err) {
+    // Handle UNIQUE constraint violations
+    if (err.message.includes('UNIQUE')) {
+      return res.json({
+        status: false,
+        msg: 'Phone number already exists',
+        err: err.message
+      })
+    }
+    return res.json({
+      status: false,
+      msg: 'Having error while saving your data',
+      err: err.message
+    })
+  }
 });
 
 /**---------------------------------------------------
@@ -94,9 +90,9 @@ router.post('/createStudent', [
 ------------------------------------------------------*/
 router.post('/StudentLogin',
     [
-        check('email').isEmail().normalizeEmail(),
+        check('phone').not().isEmpty().trim().escape(),
         check('password').not().isEmpty().trim().escape()
-    ], (req, res) => {
+    ], async (req, res) => {
         const error = validationResult(req);
         if (!error.isEmpty()) {
             return res.json({
@@ -106,34 +102,42 @@ router.post('/StudentLogin',
             });
         }
 
-        student.findOne({ 'email': req.body.email }, (err, student) => {
-            if (!student) {
-                return res.json({
-                    status: false,
-                    msg: 'Email Not Found please SignUp First...!'
-                });
-            } else {
-                bcryptjs.compare(req.body.password, student.password, (err, isMatch) => {
-                    //if error
-                    if (err)
-                        return res.send('error');
+        try {
+          const studentRecord = await studentModel.getStudentByPhone(req.body.phone);
+          if (!studentRecord) {
+              return res.json({
+                  status: false,
+                  msg: 'Phone Not Found please SignUp First...!'
+              });
+          }
 
-                    //check password valid or not
-                    if (isMatch === false) {
-                        return res.json({
-                            status: false,
-                            msg: 'Invalid Password'
-                        });
-                    } else {
-                        return res.status(200).json({
-                            status: true,
-                            msg: 'Login Sucessfully....',
-                            data: student
-                        });
-                    }
-                });
-            }
-        });
+          // Compare password
+          const isMatch = await new Promise((resolve, reject) => {
+            bcryptjs.compare(req.body.password, studentRecord.password, (err, match) => {
+              if (err) reject(err);
+              else resolve(match);
+            });
+          });
+
+          if (!isMatch) {
+              return res.json({
+                  status: false,
+                  msg: 'Invalid Password'
+              });
+          }
+
+          return res.status(200).json({
+              status: true,
+              msg: 'Login Sucessfully....',
+              data: studentRecord
+          });
+        } catch (err) {
+          return res.json({
+            status: false,
+            msg: 'Server error during login',
+            err: err.message
+          });
+        }
     });
 
 /**---------------------------------------------------
@@ -141,11 +145,10 @@ router.post('/StudentLogin',
 ------------------------------------------------------*/
 router.put('/forgotpassword',
     [
-        check('email').isEmail().normalizeEmail(),
+        check('phone').not().isEmpty().trim().escape(),
         check('password').not().isEmpty().trim().escape()
     ],
-    (req, res) => {
-        //check validation Errors
+    async (req, res) => {
         const error = validationResult(req);
         if (!error.isEmpty()) {
             return res.json({
@@ -154,31 +157,30 @@ router.put('/forgotpassword',
                 err: error.array()
             });
         }
-        //password hashing
-        const hashpassword = bcryptjs.hashSync(req.body.password, 10);
-        student_model.findOneAndUpdate({ 'email': req.body.email }, { 'password': hashpassword }, (err, result) => {
-            //if error
-            if (err) {
-                return res.json({
-                    status: false,
-                    msg: 'Server Error, please contact to Admin',
-                    error: err
-                });
-            }
-            //if result is null then email id not found
-            if (result === null) {
-                return res.json({
-                    status: false,
-                    msg: 'Email Not Found please SignUp First...!',
-                });
-            } else {
-                return res.json({
-                    status: true,
-                    msg: 'password change successfully....!',
-                });
-            }
 
-        });
+        try {
+          // Hash new password
+          const hashpassword = bcryptjs.hashSync(req.body.password, 10);
+          const result = await studentModel.updateStudentPassword(req.body.phone, hashpassword);
+          
+          if (result === null) {
+              return res.json({
+                  status: false,
+                  msg: 'Phone Not Found please SignUp First...!',
+              });
+          }
+
+          return res.json({
+              status: true,
+              msg: 'password change successfully....!',
+          });
+        } catch (err) {
+          return res.json({
+              status: false,
+              msg: 'Server Error, please contact to Admin',
+              error: err.message
+          });
+        }
     }
 );
 
@@ -189,8 +191,7 @@ router.patch('/UpdateProfileLink',
     [
         check('phone').not().isEmpty().trim().escape()    
     ],
-    (req, res) => {
-        //check validation Errors
+    async (req, res) => {
         const error = validationResult(req);
         if (!error.isEmpty()) {
             return res.json({
@@ -200,31 +201,29 @@ router.patch('/UpdateProfileLink',
             });
         }
 
-        student.findOneAndUpdate({ 'phone': req.body.phone }, { 'profile_link': req.body.profile_link }, (err, result) => {
-            //if error
-            if (err) {
-                return res.json({
-                    status: false,
-                    msg: 'Server Error, please contact to Admin',
-                    error: err
-                });
-            }
-            //if result is null then email id not found
-            if (result === null) {
-                return res.json({
-                    status: false,
-                    msg: 'Record Not Found In DB, Contact Admin...!',
-                });
-            } else {
-                return res.json({
-                    status: true,
-                    msg: 'Profile Link Updated, It will be shown to student..!',
-                });
-            }
-        });
+        try {
+          const result = await studentModel.updateProfileLink(req.body.phone, req.body.profile_link);
+          
+          if (result === null) {
+              return res.json({
+                  status: false,
+                  msg: 'Record Not Found In DB, Contact Admin...!',
+              });
+          }
+
+          return res.json({
+              status: true,
+              msg: 'Profile Link Updated, It will be shown to student..!',
+          });
+        } catch (err) {
+          return res.json({
+              status: false,
+              msg: 'Server Error, please contact to Admin',
+              error: err.message
+          });
+        }
     }
 );
-
 
 /**---------------------------------------------------
     * Disable profile  
@@ -233,8 +232,7 @@ router.patch('/DisableProfile',
     [
         check('phone').not().isEmpty().trim().escape()    
     ],
-    (req, res) => {
-        //check validation Errors
+    async (req, res) => {
         const error = validationResult(req);
         if (!error.isEmpty()) {
             return res.json({
@@ -243,64 +241,67 @@ router.patch('/DisableProfile',
                 err: error.array()
             });
         }
-        const disableBool = req.body.disable_profile === 'true';
-        student.findOneAndUpdate({ 'phone': req.body.phone }, { 'disable_profile': disableBool }, (err, result) => {
-            //if error
-            if (err) {
-                return res.json({
-                    status: false,
-                    msg: 'Server Error, please contact to Admin',
-                    error: err
-                });
-            }
-            //if result is null then email id not found
-            if (result === null) {
-                return res.json({
-                    status: false,
-                    msg: 'Record Not Found In DB, Contact Admin...!',
-                });
-            } else {
-                return res.json({
-                    status: true,
-                    msg: 'Profile Link Updated, It will be shown to student..!',
-                });
-            }
-        });
+
+        try {
+          const disableBool = req.body.disable_profile === 'true';
+          const result = await studentModel.toggleDisableProfile(req.body.phone, disableBool);
+          
+          if (result === null) {
+              return res.json({
+                  status: false,
+                  msg: 'Record Not Found In DB, Contact Admin...!',
+              });
+          }
+
+          return res.json({
+              status: true,
+              msg: 'Profile status updated successfully..!',
+          });
+        } catch (err) {
+          return res.json({
+              status: false,
+              msg: 'Server Error, please contact to Admin',
+              error: err.message
+          });
+        }
     }
 );
 
 /**
- * Delete Company Detail API
+ * Delete Student API
  */
-router.delete('/DeleteStudent', (req, res) => {
-    if (!ObjectId.isValid(req.body.id)) {
+router.delete('/DeleteStudent', async (req, res) => {
+    // Validate that id is a valid number (for SQLite)
+    if (!req.body.id || isNaN(req.body.id)) {
         return res.status(400).json({
             status: false,
             msg: 'Student Not Found.'
         });
     }
-    student.findByIdAndDelete(req.body.id, (err, result) => {
-        if (err) {
-            return res.json({
-                status: false,
-                msg: 'Database error in deleting the data',
-                error: err
-            })
-        } else if (result == null) {
-            return res.json({
-                status: false,
-                msg: 'Invalid Id',
-            })
-        } else {
-            return res.json({
-                status: true,
-                msg: 'Student deleted Successfully...',
-                res: result
-            })
-        }
-    });
-});
 
+    try {
+      const result = await studentModel.deleteStudentById(req.body.id);
+      
+      if (result === null) {
+          return res.json({
+              status: false,
+              msg: 'Invalid Id',
+          })
+      }
+
+      return res.json({
+          status: true,
+          msg: 'Student deleted Successfully...',
+          res: result
+      })
+    } catch (err) {
+      return res.json({
+          status: false,
+          msg: 'Database error in deleting the data',
+          error: err.message
+      })
+    }
+});
 
 //exports module
 module.exports = router;
