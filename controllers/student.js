@@ -32,6 +32,7 @@ router.post('/createStudent', [
   check('phone').not().isEmpty().trim().escape(),
   check('password').not().isEmpty().trim().escape(),
   check('class').not().isEmpty().trim().escape(),
+  check('usertype').optional().trim().escape(),
 ], async (req, res) => {
   const error = validationResult(req);
   if (!error.isEmpty()) {
@@ -52,14 +53,14 @@ router.post('/createStudent', [
       })
     }
 
-    // Hash password and create student
+    // Hash password and create student (allow overriding usertype)
     const hashpassword = bcryptjs.hashSync(req.body.password, 10);
     const data = { 
       name: req.body.name,
       phone: req.body.phone, 
       class: req.body.class, 
       password: hashpassword,
-      usertype: 'student'
+      usertype: req.body.usertype || 'student'
     }
 
     const result = await studentModel.createStudent(data);
