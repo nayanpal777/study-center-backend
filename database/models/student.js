@@ -53,14 +53,15 @@ const getStudentById = async (id) => {
 
 // Create a new student
 const createStudent = async (studentData) => {
-  const sql = `INSERT INTO students (name, phone, password, class, usertype, profile_link, disable_profile)
-               VALUES (?, ?, ?, ?, ?, ?, ?)`;
+  const sql = `INSERT INTO students (name, phone, password, class, board, usertype, profile_link, disable_profile)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)`;
   
   const params = [
     studentData.name,
     studentData.phone,
     studentData.password,
     studentData.class,
+    studentData.board || null,
     studentData.usertype || 'student',
     studentData.profile_link || null,
     studentData.disable_profile || 0
@@ -105,6 +106,44 @@ const toggleDisableProfile = async (phone, disableStatus) => {
   return null;
 };
 
+// Default subjects by class
+const getDefaultSubjectsByClass = (cls) => {
+  if (!cls) return [];
+  const normalized = cls.toString().toLowerCase();
+  if (normalized.includes('11') || normalized.includes('12')) {
+    return ['Physics', 'Chemistry', 'Mathematics', 'Biology', 'Hindi', 'English'];
+  }
+  return ['Science', 'Mathematics', 'Hindi', 'English', 'Social Science'];
+};
+
+// Create default subject access records for a student
+const createStudentSubjects = async (studentId, cls) => {
+  const subjects = getDefaultSubjectsByClass(cls);
+  if (!subjects.length) return [];
+
+  const insertPromises = subjects.map((subject) => {
+    const sql = `INSERT OR IGNORE INTO student_subjects (student_id, subject, enabled) VALUES (?, ?, ?)`;
+    return dbRun(sql, [studentId, subject, 1]);
+  });
+
+  await Promise.all(insertPromises);
+  return await getStudentSubjectsById(studentId);
+};
+
+// Get subject access list for a student
+const getStudentSubjectsById = async (studentId) => {
+  return await dbAll('SELECT subject, enabled FROM student_subjects WHERE student_id = ?', [studentId]);
+};
+
+// Toggle a subject access state for a student
+const upsertStudentSubject = async (studentId, subject, enabled) => {
+  const sql = `INSERT INTO student_subjects (student_id, subject, enabled)
+               VALUES (?, ?, ?)
+               ON CONFLICT(student_id, subject) DO UPDATE SET enabled = excluded.enabled`;
+  await dbRun(sql, [studentId, subject, enabled ? 1 : 0]);
+  return await getStudentSubjectsById(studentId);
+};
+
 // Delete student by id
 const deleteStudentById = async (id) => {
   const student = await getStudentById(id);
@@ -123,5 +162,9 @@ module.exports = {
   updateStudentPassword,
   updateProfileLink,
   toggleDisableProfile,
+  getDefaultSubjectsByClass,
+  createStudentSubjects,
+  getStudentSubjectsById,
+  upsertStudentSubject,
   deleteStudentById
 };

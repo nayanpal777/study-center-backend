@@ -26,12 +26,52 @@ router.get('/students', async (req, res) => {
   }
 });
 
+// GET subject access for a student
+router.get('/students/:id/subjects', async (req, res) => {
+  try {
+    const studentId = parseInt(req.params.id, 10);
+    if (isNaN(studentId)) {
+      return res.status(400).json({ status: false, msg: 'Invalid student id' });
+    }
+
+    const subjects = await studentModel.getStudentSubjectsById(studentId);
+    return res.json({ status: true, msg: 'Student subjects', res: subjects });
+  } catch (err) {
+    return res.json({ status: false, msg: 'Error fetching student subjects', err: err.message });
+  }
+});
+
+// PATCH update subject access for a student
+router.patch('/students/:id/subjects', [
+  check('subject').not().isEmpty().trim().escape(),
+  check('enabled').isBoolean()
+], async (req, res) => {
+  const error = validationResult(req);
+  if (!error.isEmpty()) {
+    return res.status(400).json({ status: false, msg: 'Invalid Input', err: error.array() });
+  }
+
+  try {
+    const studentId = parseInt(req.params.id, 10);
+    if (isNaN(studentId)) {
+      return res.status(400).json({ status: false, msg: 'Invalid student id' });
+    }
+
+    const { subject, enabled } = req.body;
+    const updatedSubjects = await studentModel.upsertStudentSubject(studentId, subject, enabled);
+    return res.json({ status: true, msg: 'Subject access updated', res: updatedSubjects });
+  } catch (err) {
+    return res.json({ status: false, msg: 'Error updating subject access', err: err.message });
+  }
+});
+
 // POST create student
 router.post('/createStudent', [
   check('name').not().isEmpty().trim().escape(),
   check('phone').not().isEmpty().trim().escape(),
   check('password').not().isEmpty().trim().escape(),
   check('class').not().isEmpty().trim().escape(),
+  check('board').optional().trim().escape(),
   check('usertype').optional().trim().escape(),
 ], async (req, res) => {
   const error = validationResult(req);
@@ -58,12 +98,14 @@ router.post('/createStudent', [
     const data = { 
       name: req.body.name,
       phone: req.body.phone, 
-      class: req.body.class, 
+      class: req.body.class,
+      board: req.body.board,
       password: hashpassword,
       usertype: req.body.usertype || 'student'
     }
 
     const result = await studentModel.createStudent(data);
+    await studentModel.createStudentSubjects(result.id, result.class);
     return res.json({
       status: true,
       msg: 'Data saved successfully.',
