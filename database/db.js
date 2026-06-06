@@ -117,6 +117,43 @@ const initializeDatabase = () => {
         console.log('Notices table ready');
       }
     });
+
+    // Create Reviews table for student testimonials
+    db.run(`
+      CREATE TABLE IF NOT EXISTS reviews (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        student_name TEXT NOT NULL,
+        class TEXT NOT NULL,
+        board TEXT NOT NULL,
+        review_text TEXT NOT NULL,
+        rating INTEGER NOT NULL,
+        approved INTEGER DEFAULT 0,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+    `, (err) => {
+      if (err) {
+        console.error('Error creating reviews table:', err);
+      } else {
+        console.log('Reviews table ready');
+        db.all("PRAGMA table_info(reviews);", (err, rows) => {
+          if (err) {
+            console.error('Error checking reviews schema:', err);
+            return;
+          }
+
+          const hasApproved = rows.some(row => row.name === 'approved');
+          if (!hasApproved) {
+            db.run('ALTER TABLE reviews ADD COLUMN approved INTEGER DEFAULT 0;', (err) => {
+              if (err) {
+                console.error('Error adding approved column to reviews:', err);
+              } else {
+                console.log('Reviews table upgraded with approved column.');
+              }
+            });
+          }
+        });
+      }
+    });
   });
 };
 
