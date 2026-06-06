@@ -144,6 +144,42 @@ const upsertStudentSubject = async (studentId, subject, enabled) => {
   return await getStudentSubjectsById(studentId);
 };
 
+// Get all 12 months
+const getAllMonths = () => {
+  return ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+};
+
+// Create default fee records for a student (all 12 months set to Unpaid)
+const createStudentFees = async (studentId) => {
+  const months = getAllMonths();
+  const insertPromises = months.map((month) => {
+    const sql = `INSERT OR IGNORE INTO student_fees (student_id, month, status) VALUES (?, ?, ?)`;
+    return dbRun(sql, [studentId, month, 'Unpaid']);
+  });
+
+  await Promise.all(insertPromises);
+  return await getStudentFeesById(studentId);
+};
+
+// Get fee records for a student
+const getStudentFeesById = async (studentId) => {
+  return await dbAll('SELECT month, status FROM student_fees WHERE student_id = ? ORDER BY student_fees.rowid', [studentId]);
+};
+
+// Update a fee status for a student
+const upsertStudentFee = async (studentId, month, status) => {
+  const validStatuses = ['Paid', 'Unpaid', 'Not applicable'];
+  if (!validStatuses.includes(status)) {
+    throw new Error('Invalid fee status');
+  }
+
+  const sql = `INSERT INTO student_fees (student_id, month, status)
+               VALUES (?, ?, ?)
+               ON CONFLICT(student_id, month) DO UPDATE SET status = excluded.status, updated_at = CURRENT_TIMESTAMP`;
+  await dbRun(sql, [studentId, month, status]);
+  return await getStudentFeesById(studentId);
+};
+
 // Delete student by id
 const deleteStudentById = async (id) => {
   const student = await getStudentById(id);
@@ -166,5 +202,9 @@ module.exports = {
   createStudentSubjects,
   getStudentSubjectsById,
   upsertStudentSubject,
+  getAllMonths,
+  createStudentFees,
+  getStudentFeesById,
+  upsertStudentFee,
   deleteStudentById
 };

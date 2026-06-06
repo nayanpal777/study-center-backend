@@ -65,6 +65,45 @@ router.patch('/students/:id/subjects', [
   }
 });
 
+// GET fee records for a student
+router.get('/students/:id/fees', async (req, res) => {
+  try {
+    const studentId = parseInt(req.params.id, 10);
+    if (isNaN(studentId)) {
+      return res.status(400).json({ status: false, msg: 'Invalid student id' });
+    }
+
+    const fees = await studentModel.getStudentFeesById(studentId);
+    return res.json({ status: true, msg: 'Student fees', res: fees });
+  } catch (err) {
+    return res.json({ status: false, msg: 'Error fetching student fees', err: err.message });
+  }
+});
+
+// PATCH update fee status for a student
+router.patch('/students/:id/fees', [
+  check('month').not().isEmpty().trim().escape(),
+  check('status').not().isEmpty().trim().escape()
+], async (req, res) => {
+  const error = validationResult(req);
+  if (!error.isEmpty()) {
+    return res.status(400).json({ status: false, msg: 'Invalid Input', err: error.array() });
+  }
+
+  try {
+    const studentId = parseInt(req.params.id, 10);
+    if (isNaN(studentId)) {
+      return res.status(400).json({ status: false, msg: 'Invalid student id' });
+    }
+
+    const { month, status } = req.body;
+    const updatedFees = await studentModel.upsertStudentFee(studentId, month, status);
+    return res.json({ status: true, msg: 'Fee status updated', res: updatedFees });
+  } catch (err) {
+    return res.json({ status: false, msg: 'Error updating fee status', err: err.message });
+  }
+});
+
 // POST create student
 router.post('/createStudent', [
   check('name').not().isEmpty().trim().escape(),
@@ -106,6 +145,7 @@ router.post('/createStudent', [
 
     const result = await studentModel.createStudent(data);
     await studentModel.createStudentSubjects(result.id, result.class);
+    await studentModel.createStudentFees(result.id);
     return res.json({
       status: true,
       msg: 'Data saved successfully.',

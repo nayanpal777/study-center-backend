@@ -80,6 +80,26 @@ const initializeDatabase = () => {
         console.log('Student subjects table ready');
       }
     });
+
+    // Create Student Fees table for monthly fee tracking
+    db.run(`
+      CREATE TABLE IF NOT EXISTS student_fees (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        student_id INTEGER NOT NULL,
+        month TEXT NOT NULL,
+        status TEXT DEFAULT 'Unpaid',
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(student_id, month),
+        FOREIGN KEY(student_id) REFERENCES students(id) ON DELETE CASCADE
+      );
+    `, (err) => {
+      if (err) {
+        console.error('Error creating student_fees table:', err);
+      } else {
+        console.log('Student fees table ready');
+      }
+    });
   });
 };
 
