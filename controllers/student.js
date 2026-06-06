@@ -2,6 +2,7 @@ const router = require('express').Router();
 const bodyparser = require('body-parser');
 const bcryptjs = require('bcryptjs');
 const studentModel = require('../database/models/student');
+const noticeModel = require('../database/models/notice');
 const { check, validationResult } = require('express-validator');
 
 router.get('/', (req, res) => {
@@ -23,6 +24,75 @@ router.get('/students', async (req, res) => {
       msg: 'Having error while fetching data',
       err: err.message
     })
+  }
+});
+
+// GET notices for a student by id and filters
+router.get('/students/:id/notices', async (req, res) => {
+  try {
+    const studentId = parseInt(req.params.id, 10);
+    if (isNaN(studentId)) {
+      return res.status(400).json({ status: false, msg: 'Invalid student id' });
+    }
+
+    const student = await studentModel.getStudentById(studentId);
+    if (!student) {
+      return res.status(404).json({ status: false, msg: 'Student not found' });
+    }
+
+    const notices = await noticeModel.getNoticesForStudent(student);
+    return res.json({ status: true, msg: 'Student notices', res: notices });
+  } catch (err) {
+    return res.json({ status: false, msg: 'Error fetching notices', err: err.message });
+  }
+});
+
+// POST create notice targeted by board/class
+router.post('/notices', [
+  check('message').not().isEmpty().trim().escape(),
+  check('board').optional().trim().escape(),
+  check('class').optional().trim().escape()
+], async (req, res) => {
+  const error = validationResult(req);
+  if (!error.isEmpty()) {
+    return res.status(400).json({ status: false, msg: 'Invalid Input', err: error.array() });
+  }
+
+  try {
+    const notice = await noticeModel.createNotice({
+      message: req.body.message,
+      board: req.body.board || null,
+      class: req.body.class || null
+    });
+
+    return res.json({ status: true, msg: 'Notice published successfully', res: notice });
+  } catch (err) {
+    return res.json({ status: false, msg: 'Error publishing notice', err: err.message });
+  }
+});
+
+// GET all notices for admin
+router.get('/notices', async (req, res) => {
+  try {
+    const notices = await noticeModel.getAllNotices();
+    return res.json({ status: true, msg: 'All notices', res: notices });
+  } catch (err) {
+    return res.json({ status: false, msg: 'Error fetching notices', err: err.message });
+  }
+});
+
+// DELETE a notice by id
+router.delete('/notices/:id', async (req, res) => {
+  try {
+    const noticeId = parseInt(req.params.id, 10);
+    if (isNaN(noticeId)) {
+      return res.status(400).json({ status: false, msg: 'Invalid notice id' });
+    }
+
+    await noticeModel.deleteNotice(noticeId);
+    return res.json({ status: true, msg: 'Notice deleted successfully' });
+  } catch (err) {
+    return res.json({ status: false, msg: 'Error deleting notice', err: err.message });
   }
 });
 

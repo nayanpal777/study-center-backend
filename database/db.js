@@ -100,6 +100,23 @@ const initializeDatabase = () => {
         console.log('Student fees table ready');
       }
     });
+
+    // Create Notices table for admin-to-student messages
+    db.run(`
+      CREATE TABLE IF NOT EXISTS notices (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        message TEXT NOT NULL,
+        board TEXT,
+        class TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+    `, (err) => {
+      if (err) {
+        console.error('Error creating notices table:', err);
+      } else {
+        console.log('Notices table ready');
+      }
+    });
   });
 };
 
