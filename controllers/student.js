@@ -220,9 +220,16 @@ router.get('/students/:id/subjects', async (req, res) => {
 });
 
 // PATCH update subject access for a student
+// Body: { "subjects": { "Science": 1, "Mathematics": 0, ... } }
 router.patch('/students/:id/subjects', [
-  check('subject').not().isEmpty().trim().escape(),
-  check('enabled').isBoolean()
+  check('subjects').not().isEmpty().withMessage('subjects is required').bail()
+    .custom((val) => {
+      if (typeof val !== 'object' || Array.isArray(val)) throw new Error('subjects must be a plain object');
+      for (const [, v] of Object.entries(val)) {
+        if (v !== 0 && v !== 1) throw new Error('Each subject value must be 0 or 1');
+      }
+      return true;
+    })
 ], async (req, res) => {
   const error = validationResult(req);
   if (!error.isEmpty()) {
@@ -235,8 +242,7 @@ router.patch('/students/:id/subjects', [
       return res.status(400).json({ status: false, msg: 'Invalid student id' });
     }
 
-    const { subject, enabled } = req.body;
-    const updatedSubjects = await studentModel.upsertStudentSubject(studentId, subject, enabled);
+    const updatedSubjects = await studentModel.upsertStudentSubject(studentId, req.body.subjects);
     return res.json({ status: true, msg: 'Subject access updated', res: updatedSubjects });
   } catch (err) {
     return res.json({ status: false, msg: 'Error updating subject access', err: err.message });
@@ -259,23 +265,34 @@ router.get('/students/:id/fees', async (req, res) => {
 });
 
 // PATCH update fee status for a student
-router.patch('/students/:id/fees', [
-  check('month').not().isEmpty().trim().escape(),
-  check('status').not().isEmpty().trim().escape()
-], async (req, res) => {
-  const error = validationResult(req);
-  if (!error.isEmpty()) {
-    return res.status(400).json({ status: false, msg: 'Invalid Input', err: error.array() });
-  }
-
+// Body: { "May": "paid" }  — partial update, only specified months are changed
+router.patch('/students/:id/fees', async (req, res) => {
   try {
     const studentId = parseInt(req.params.id, 10);
     if (isNaN(studentId)) {
       return res.status(400).json({ status: false, msg: 'Invalid student id' });
     }
 
-    const { month, status } = req.body;
-    const updatedFees = await studentModel.upsertStudentFee(studentId, month, status);
+    const updates = req.body;
+    if (typeof updates !== 'object' || Array.isArray(updates) || Object.keys(updates).length === 0) {
+      return res.status(400).json({ status: false, msg: 'Request body must be a non-empty object like { "May": "paid" }' });
+    }
+
+    const validStatuses = ['paid', 'unpaid', 'not_applicable'];
+    for (const [month, status] of Object.entries(updates)) {
+      if (!validStatuses.includes(status)) {
+        return res.status(400).json({
+          status: false,
+          msg: `Invalid status "${status}" for "${month}". Must be one of: paid, unpaid, not_applicable`
+        });
+      }
+    }
+
+    // Load existing fees hash and merge updates into it
+    const existing = await studentModel.getStudentFeesById(studentId);
+    const merged = { ...existing, ...updates };
+
+    const updatedFees = await studentModel.upsertStudentFee(studentId, merged);
     return res.json({ status: true, msg: 'Fee status updated', res: updatedFees });
   } catch (err) {
     return res.json({ status: false, msg: 'Error updating fee status', err: err.message });

@@ -28,10 +28,25 @@ const initializeDatabase = async () => {
         usertype TEXT DEFAULT 'student',
         profile_link TEXT,
         disable_profile INTEGER DEFAULT 0,
+        subjects TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       )
     `);
     console.log('Students table ready');
+
+    // Migration guard: add subjects column if it doesn't exist (for existing databases)
+    const subjectsColResult = await db.execute(`SELECT name FROM pragma_table_info('students') WHERE name = 'subjects'`);
+    if (subjectsColResult.rows.length === 0) {
+      await db.execute('ALTER TABLE students ADD COLUMN subjects TEXT');
+      console.log('Students table upgraded with subjects column.');
+    }
+
+    // Migration guard: add fees column if it doesn't exist (for existing databases)
+    const feesColResult = await db.execute(`SELECT name FROM pragma_table_info('students') WHERE name = 'fees'`);
+    if (feesColResult.rows.length === 0) {
+      await db.execute('ALTER TABLE students ADD COLUMN fees TEXT');
+      console.log('Students table upgraded with fees column.');
+    }
 
     // Create index on phone for faster lookups
     await db.execute('CREATE INDEX IF NOT EXISTS idx_phone ON students(phone)');
