@@ -1,25 +1,23 @@
-const sqlite3 = require('sqlite3').verbose();
-const path = require('path');
+const { createClient } = require('@libsql/client');
 
-// Database file location
-const DB_PATH = path.join(__dirname, 'study_center.db');
+// Disable TLS certificate verification in local development only.
+// Turso uses a certificate chain that Windows/Node.js may reject locally.
+// On Render (NODE_ENV=production) this is NOT set and TLS is fully verified.
+if (process.env.NODE_ENV !== 'production') {
+  process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+}
 
-// Create/open SQLite3 database connection
-const db = new sqlite3.Database(DB_PATH, (err) => {
-  if (err) {
-    console.error('Database Connection Failed....', err);
-  } else {
-    console.log('SQLite3 Database Connection Successful....');
-    // Initialize database schema on startup
-    initializeDatabase();
-  }
+// Create Turso/libSQL database client
+const db = createClient({
+  url: process.env.TURSO_DB_URL,
+  authToken: process.env.TURSO_AUTH_TOKEN
 });
 
 // Function to initialize database schema (create tables if they don't exist)
-const initializeDatabase = () => {
-  db.serialize(() => {
+const initializeDatabase = async () => {
+  try {
     // Create Students table
-    db.run(`
+    await db.execute(`
       CREATE TABLE IF NOT EXISTS students (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL,
@@ -31,19 +29,15 @@ const initializeDatabase = () => {
         profile_link TEXT,
         disable_profile INTEGER DEFAULT 0,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      );
-    `, (err) => {
-      if (err) {
-        console.error('Error creating students table:', err);
-      } else {
-        console.log('Students table ready');
-        // Create index on phone for faster lookups
-        db.run('CREATE INDEX IF NOT EXISTS idx_phone ON students(phone);');
-      }
-    });
+      )
+    `);
+    console.log('Students table ready');
+
+    // Create index on phone for faster lookups
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_phone ON students(phone)');
 
     // Create Dashboard table
-    db.run(`
+    await db.execute(`
       CREATE TABLE IF NOT EXISTS dashboard (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL,
@@ -51,19 +45,15 @@ const initializeDatabase = () => {
         class TEXT NOT NULL,
         permission INTEGER DEFAULT 0,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      );
-    `, (err) => {
-      if (err) {
-        console.error('Error creating dashboard table:', err);
-      } else {
-        console.log('Dashboard table ready');
-        // Create index on email for faster lookups
-        db.run('CREATE INDEX IF NOT EXISTS idx_dashboard_email ON dashboard(email);');
-      }
-    });
+      )
+    `);
+    console.log('Dashboard table ready');
+
+    // Create index on email for faster lookups
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_dashboard_email ON dashboard(email)');
 
     // Create Student Subjects table for per-student course access control
-    db.run(`
+    await db.execute(`
       CREATE TABLE IF NOT EXISTS student_subjects (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         student_id INTEGER NOT NULL,
@@ -72,17 +62,12 @@ const initializeDatabase = () => {
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         UNIQUE(student_id, subject),
         FOREIGN KEY(student_id) REFERENCES students(id) ON DELETE CASCADE
-      );
-    `, (err) => {
-      if (err) {
-        console.error('Error creating student_subjects table:', err);
-      } else {
-        console.log('Student subjects table ready');
-      }
-    });
+      )
+    `);
+    console.log('Student subjects table ready');
 
     // Create Student Fees table for monthly fee tracking
-    db.run(`
+    await db.execute(`
       CREATE TABLE IF NOT EXISTS student_fees (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         student_id INTEGER NOT NULL,
@@ -92,34 +77,24 @@ const initializeDatabase = () => {
         updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
         UNIQUE(student_id, month),
         FOREIGN KEY(student_id) REFERENCES students(id) ON DELETE CASCADE
-      );
-    `, (err) => {
-      if (err) {
-        console.error('Error creating student_fees table:', err);
-      } else {
-        console.log('Student fees table ready');
-      }
-    });
+      )
+    `);
+    console.log('Student fees table ready');
 
     // Create Notices table for admin-to-student messages
-    db.run(`
+    await db.execute(`
       CREATE TABLE IF NOT EXISTS notices (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         message TEXT NOT NULL,
         board TEXT,
         class TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      );
-    `, (err) => {
-      if (err) {
-        console.error('Error creating notices table:', err);
-      } else {
-        console.log('Notices table ready');
-      }
-    });
+      )
+    `);
+    console.log('Notices table ready');
 
     // Create Reviews table for student testimonials
-    db.run(`
+    await db.execute(`
       CREATE TABLE IF NOT EXISTS reviews (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         student_name TEXT NOT NULL,
@@ -129,32 +104,25 @@ const initializeDatabase = () => {
         rating INTEGER NOT NULL,
         approved INTEGER DEFAULT 0,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      );
-    `, (err) => {
-      if (err) {
-        console.error('Error creating reviews table:', err);
-      } else {
-        console.log('Reviews table ready');
-        db.all("PRAGMA table_info(reviews);", (err, rows) => {
-          if (err) {
-            console.error('Error checking reviews schema:', err);
-            return;
-          }
+      )
+    `);
+    console.log('Reviews table ready');
 
-          const hasApproved = rows.some(row => row.name === 'approved');
-          if (!hasApproved) {
-            db.run('ALTER TABLE reviews ADD COLUMN approved INTEGER DEFAULT 0;', (err) => {
-              if (err) {
-                console.error('Error adding approved column to reviews:', err);
-              } else {
-                console.log('Reviews table upgraded with approved column.');
-              }
-            });
-          }
-        });
-      }
-    });
-  });
+    // Migration guard: add approved column if it doesn't exist (for legacy databases)
+    const pragmaResult = await db.execute(`SELECT name FROM pragma_table_info('reviews') WHERE name = 'approved'`);
+    if (pragmaResult.rows.length === 0) {
+      await db.execute('ALTER TABLE reviews ADD COLUMN approved INTEGER DEFAULT 0');
+      console.log('Reviews table upgraded with approved column.');
+    }
+
+    console.log('Turso database connection successful and schema initialized.');
+  } catch (err) {
+    console.error('Database initialization error:', err);
+    process.exit(1);
+  }
 };
+
+// Initialize schema on startup
+initializeDatabase();
 
 module.exports = db;

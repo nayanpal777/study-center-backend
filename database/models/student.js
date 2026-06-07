@@ -1,34 +1,22 @@
-//Student Database Model - SQLite3
+//Student Database Model - Turso/libSQL
 const db = require('../db');
 
-// Promisify db.get() for async queries
-const dbGet = (sql, params = []) => {
-  return new Promise((resolve, reject) => {
-    db.get(sql, params, (err, row) => {
-      if (err) reject(err);
-      else resolve(row);
-    });
-  });
+// Execute query and return single row
+const dbGet = async (sql, params = []) => {
+  const result = await db.execute({ sql, args: params });
+  return result.rows[0] ?? null;
 };
 
-// Promisify db.all() for async queries
-const dbAll = (sql, params = []) => {
-  return new Promise((resolve, reject) => {
-    db.all(sql, params, (err, rows) => {
-      if (err) reject(err);
-      else resolve(rows);
-    });
-  });
+// Execute query and return all rows
+const dbAll = async (sql, params = []) => {
+  const result = await db.execute({ sql, args: params });
+  return result.rows;
 };
 
-// Promisify db.run() for async mutations
-const dbRun = (sql, params = []) => {
-  return new Promise((resolve, reject) => {
-    db.run(sql, params, function(err) {
-      if (err) reject(err);
-      else resolve(this);
-    });
-  });
+// Execute mutation and return lastID + changes
+const dbRun = async (sql, params = []) => {
+  const result = await db.execute({ sql, args: params });
+  return { lastID: Number(result.lastInsertRowid), changes: result.rowsAffected };
 };
 
 // Get all students

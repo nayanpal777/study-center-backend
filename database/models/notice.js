@@ -1,31 +1,19 @@
-// Notice Database Model - SQLite3
+// Notice Database Model - Turso/libSQL
 const db = require('../db');
 
-const dbGet = (sql, params = []) => {
-  return new Promise((resolve, reject) => {
-    db.get(sql, params, (err, row) => {
-      if (err) reject(err);
-      else resolve(row);
-    });
-  });
+const dbGet = async (sql, params = []) => {
+  const result = await db.execute({ sql, args: params });
+  return result.rows[0] ?? null;
 };
 
-const dbAll = (sql, params = []) => {
-  return new Promise((resolve, reject) => {
-    db.all(sql, params, (err, rows) => {
-      if (err) reject(err);
-      else resolve(rows);
-    });
-  });
+const dbAll = async (sql, params = []) => {
+  const result = await db.execute({ sql, args: params });
+  return result.rows;
 };
 
-const dbRun = (sql, params = []) => {
-  return new Promise((resolve, reject) => {
-    db.run(sql, params, function (err) {
-      if (err) reject(err);
-      else resolve(this);
-    });
-  });
+const dbRun = async (sql, params = []) => {
+  const result = await db.execute({ sql, args: params });
+  return { lastID: Number(result.lastInsertRowid), changes: result.rowsAffected };
 };
 
 const createNotice = async ({ message, board, class: cls }) => {
