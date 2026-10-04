@@ -172,6 +172,25 @@ const upsertStudentFee = async (studentId, feesHash) => {
   return feesHash;
 };
 
+// Get test record hash for a student (parsed from students.test_records JSON column)
+const getStudentTestRecordsById = async (studentId) => {
+  const row = await dbGet('SELECT test_records FROM students WHERE id = ?', [studentId]);
+  if (!row || !row.test_records) return {};
+  try {
+    return JSON.parse(row.test_records);
+  } catch {
+    return {};
+  }
+};
+
+// Update the full test records hash for a student
+// testRecordsHash format: { "T1": 5, "T2": 12, "T3": 2 }
+const upsertStudentTestRecords = async (studentId, testRecordsHash) => {
+  const sql = 'UPDATE students SET test_records = ? WHERE id = ?';
+  await dbRun(sql, [JSON.stringify(testRecordsHash), studentId]);
+  return testRecordsHash;
+};
+
 // Delete student by id
 const deleteStudentById = async (id) => {
   const student = await getStudentById(id);
@@ -198,5 +217,7 @@ module.exports = {
   createStudentFees,
   getStudentFeesById,
   upsertStudentFee,
+  getStudentTestRecordsById,
+  upsertStudentTestRecords,
   deleteStudentById
 };

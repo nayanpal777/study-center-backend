@@ -4,6 +4,7 @@ const bcryptjs = require('bcryptjs');
 const studentModel = require('../database/models/student');
 const noticeModel = require('../database/models/notice');
 const reviewModel = require('../database/models/review');
+const testRecordModel = require('../database/models/testRecord');
 const { check, validationResult } = require('express-validator');
 
 router.get('/', (req, res) => {
@@ -201,6 +202,158 @@ router.delete('/reviews/:id', async (req, res) => {
     return res.json({ status: true, msg: 'Review deleted successfully' });
   } catch (err) {
     return res.json({ status: false, msg: 'Error deleting review', err: err.message });
+  }
+});
+
+// TEST RECORDS stored in students.test_records JSON hash
+router.get('/students/test-records', async (req, res) => {
+  try {
+    const students = await studentModel.getAllStudents();
+    const filtered = students.filter((student) => {
+      if (!student) return false;
+      if (req.query.board && student.board !== req.query.board) return false;
+      if (req.query.class && student.class !== req.query.class) return false;
+      return true;
+    });
+
+    const payload = filtered.map((student) => {
+      const tests = (() => {
+        try {
+          return JSON.parse(student.test_records || '{}');
+        } catch {
+          return {};
+        }
+      })();
+
+      const values = Object.values(tests).filter((value) => Number.isFinite(Number(value)));
+      const total = values.reduce((sum, value) => sum + Number(value), 0);
+      const average_percent = values.length ? ((total / (values.length * 20)) * 100) : 0;
+      const testNumbers = Object.keys(tests).map((key) => key).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+      const latest_mark = testNumbers.length ? Number(tests[testNumbers[testNumbers.length - 1]]) : null;
+
+      return {
+        id: student.id,
+        name: student.name,
+        board: student.board,
+        class: student.class,
+        tests,
+        average_percent: Number(average_percent.toFixed(1)),
+        latest_mark
+      };
+    }).sort((a, b) => (b.average_percent || 0) - (a.average_percent || 0));
+
+    return res.json({ status: true, msg: 'Test records loaded', res: payload });
+  } catch (err) {
+    return res.json({ status: false, msg: 'Error fetching test records', err: err.message });
+  }
+});
+
+router.get('/students/:id/test-records', async (req, res) => {
+  try {
+    const studentId = parseInt(req.params.id, 10);
+    if (isNaN(studentId)) {
+      return res.status(400).json({ status: false, msg: 'Invalid student id' });
+    }
+
+    const student = await studentModel.getStudentById(studentId);
+    if (!student) {
+      return res.status(404).json({ status: false, msg: 'Student not found' });
+    }
+
+    let tests = {};
+    try {
+      tests = JSON.parse(student.test_records || '{}');
+    } catch {
+      tests = {};
+    }
+
+    return res.json({ status: true, msg: 'Student test records', res: tests });
+  } catch (err) {
+    return res.json({ status: false, msg: 'Error fetching student test records', err: err.message });
+  }
+});
+
+router.post('/students/test-records', [
+  check('student_id').isInt({ min: 1 }),
+  check('test_name').not().isEmpty().trim(),
+  check('marks').optional().isFloat({ min: 0 })
+], async (req, res) => {
+  const error = validationResult(req);
+  if (!error.isEmpty()) {
+    return res.status(400).json({ status: false, msg: 'Invalid Input', err: error.array() });
+  }
+
+  try {
+    const studentId = parseInt(req.body.student_id, 10);
+    const student = await studentModel.getStudentById(studentId);
+    if (!student) {
+      return res.status(404).json({ status: false, msg: 'Student not found' });
+    }
+
+    const existing = (() => {
+      try {
+        return JSON.parse(student.test_records || '{}');
+      } catch {
+        return {};
+      }
+    })();
+
+    const testName = String(req.body.test_name || 'T1');
+    const marks = Number(req.body.marks);
+    const updatedRecords = { ...existing, [testName]: marks };
+
+    const result = await studentModel.upsertStudentTestRecords(studentId, updatedRecords);
+    return res.json({ status: true, msg: 'Test record saved', res: result });
+  } catch (err) {
+    return res.json({ status: false, msg: 'Error saving test record', err: err.message });
+  }
+});
+
+router.patch('/students/:id/test-records', async (req, res) => {
+  try {
+    const studentId = parseInt(req.params.id, 10);
+    if (isNaN(studentId)) {
+      return res.status(400).json({ status: false, msg: 'Invalid student id' });
+    }
+
+    const student = await studentModel.getStudentById(studentId);
+    if (!student) {
+      return res.status(404).json({ status: false, msg: 'Student not found' });
+    }
+
+    const existing = (() => {
+      try {
+        return JSON.parse(student.test_records || '{}');
+      } catch {
+        return {};
+      }
+    })();
+
+    const merged = { ...existing, ...(req.body || {}) };
+    const updated = await studentModel.upsertStudentTestRecords(studentId, merged);
+    return res.json({ status: true, msg: 'Test records updated', res: updated });
+  } catch (err) {
+    return res.json({ status: false, msg: 'Error updating test records', err: err.message });
+  }
+});
+
+router.delete('/students/:id/test-records', async (req, res) => {
+  try {
+    const studentId = parseInt(req.params.id, 10);
+    if (isNaN(studentId)) {
+      return res.status(400).json({ status: false, msg: 'Invalid student id' });
+    }
+
+    const student = await studentModel.getStudentById(studentId);
+    if (!student) {
+      return res.status(404).json({ status: false, msg: 'Student not found' });
+    }
+
+    const cleared = {};
+    await studentModel.upsertStudentTestRecords(studentId, cleared);
+    return res.json({ status: true, msg: 'Test records cleared', res: cleared });
+  } catch (err) {
+    return res.json({ status: false, msg: 'Error clearing test records', err: err.message });
   }
 });
 
